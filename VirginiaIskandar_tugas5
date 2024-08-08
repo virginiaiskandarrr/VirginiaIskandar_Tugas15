@@ -1,0 +1,406 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from tkinter import *
+import pymysql.cursors
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from datetime import datetime
+
+class App(tk.Tk):
+    def __init__(self, *args, **kwargs):
+        tk.Tk.__init__(self, *args, **kwargs)
+
+        self.title_font = ("Helvetica", 18, "bold")
+        container = tk.Frame(self)
+        container.pack(side="top", fill="both", expand=True)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+
+        self.frames = {}
+        for F in (StartPage, PageOne, PageTwo, PageThree, PageFour):
+            page_name = F.__name__
+            frame = F(parent=container, controller=self)
+            self.frames[page_name] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
+
+        self.show_frame("StartPage")
+
+    def show_frame(self, page_name):
+        frame = self.frames[page_name]
+        frame.tkraise()
+
+class StartPage(tk.Frame):
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+
+        # Label untuk judul halaman
+        title_label = tk.Label(self, text="Home Page", font=controller.title_font)
+        title_label.pack(side="top", fill="x", pady=10)
+
+        # Label untuk pesan sambutan
+        welcome_label = tk.Label(self, text="Welcome to HematinAja, Don't waste your money !!! 😒", font=("Helvetica", 12, "italic"))
+        welcome_label.pack(side="top", fill="x", pady=10)
+
+        # Tombol navigasi
+        button1 = tk.Button(self, text="Insert Data", command=lambda: controller.show_frame("PageOne"))
+        button2 = tk.Button(self, text="Show Data", command=lambda: controller.show_frame("PageTwo"))
+        button3 = tk.Button(self, text="Update Data", command=lambda: controller.show_frame("PageThree"))
+        button4 = tk.Button(self, text="Delete Data", command=lambda: controller.show_frame("PageFour"))
+
+        button1.pack(pady=10)
+        button2.pack(pady=10)
+        button3.pack(pady=10)
+        button4.pack(pady=10)
+
+class PageOne(tk.Frame):
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+
+        label = tk.Label(self, text="Insert Data", font=controller.title_font)
+        label.pack(side="top", fill="x", pady=10)
+
+        self.date_var = tk.StringVar()
+        self.category_var = tk.StringVar()
+        self.nominal_var = tk.StringVar()
+        self.income_var = tk.IntVar()
+        self.spending_var = tk.IntVar()
+
+        form_frame = Frame(self)
+        form_frame.pack(pady=20)
+
+        label_date = tk.Label(form_frame, text="Date (YYYY-MM-DD)")
+        entry_date = tk.Entry(form_frame, textvariable=self.date_var)
+        label_category = tk.Label(form_frame, text="Category")
+        entry_category = tk.Entry(form_frame, textvariable=self.category_var)
+        label_nominal = tk.Label(form_frame, text="Nominal")
+        entry_nominal = tk.Entry(form_frame, textvariable=self.nominal_var)
+
+        checkbox_income = tk.Checkbutton(form_frame, text="Income", variable=self.income_var)
+        checkbox_spending = tk.Checkbutton(form_frame, text="Spending", variable=self.spending_var)
+
+        label_date.grid(row=0, column=0, padx=10, pady=5)
+        entry_date.grid(row=0, column=1, padx=10, pady=5)
+        label_category.grid(row=1, column=0, padx=10, pady=5)
+        entry_category.grid(row=1, column=1, padx=10, pady=5)
+        label_nominal.grid(row=2, column=0, padx=10, pady=5)
+        entry_nominal.grid(row=2, column=1, padx=10, pady=5)
+
+        checkbox_income.grid(row=3, column=0, padx=10, pady=5)
+        checkbox_spending.grid(row=3, column=1, padx=10, pady=5)
+
+        button_submit = tk.Button(self, text="Submit", command=self.insert_data)
+        button_submit.pack(pady=10)
+
+        button_home = tk.Button(self, text="Back to Home", command=lambda: controller.show_frame("StartPage"))
+        button_home.pack(pady=10)
+
+    def insert_data(self):
+        date = self.date_var.get()
+        category = self.category_var.get()
+        nominal = self.nominal_var.get().replace('.', '')  # Hapus titik sebelum konversi ke int
+        nominal = int(nominal)
+        income = self.income_var.get()
+        spending = self.spending_var.get()
+
+        if income:
+            self.add_data_to_db(date, category, nominal, 0)
+        elif spending:
+            self.add_data_to_db(date, category, 0, nominal)
+
+        messagebox.showinfo("Success", "Data inserted successfully")
+        self.reset_fields()
+
+
+    def reset_fields(self):
+        self.date_var.set("")
+        self.category_var.set("")
+        self.nominal_var.set("")
+        self.income_var.set(0)
+        self.spending_var.set(0)
+
+    def add_data_to_db(self, date, category, income, spending):
+        connection = pymysql.connect(host='localhost', user='root', password='', database='hematinaja')
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT saldo FROM hitunguang ORDER BY id DESC LIMIT 1")
+            result = cursor.fetchone()
+            current_balance = int(result[0]) if result else 0  # Pastikan saldo dikonversi ke integer
+
+            # Pastikan income dan spending adalah integer
+            income = int(income)
+            spending = int(spending)
+
+            new_balance = current_balance + income - spending
+
+            sql = "INSERT INTO hitunguang (tanggal, kategori, pemasukan, pengeluaran, saldo) VALUES (%s, %s, %s, %s, %s)"
+            cursor.execute(sql, (date, category, income, spending, new_balance))
+            connection.commit()
+
+
+class PageTwo(tk.Frame):
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+
+        label = tk.Label(self, text="Show Data", font=controller.title_font)
+        label.pack(side="top", fill="x", pady=10)
+
+        self.form_frame = Frame(self)
+        self.form_frame.grid_rowconfigure(0)
+        self.form_frame.grid_columnconfigure(2)
+
+        self.month_field = Entry(self.form_frame)
+        label = Label(self.form_frame, text="Month (MM-YYYY)")
+        button_show = tk.Button(self.form_frame, text="Show", command=self.display_data)
+
+        label.grid(row=0, column=0)
+        self.month_field.grid(row=0, column=1)
+        button_show.grid(row=0, column=2, padx=10)
+
+        self.form_frame.pack()
+
+        # Scrollbar table
+        table_scroll = Scrollbar(self)
+        table_scroll.pack(side=RIGHT, fill=Y)
+
+        table_scroll_horizontal = Scrollbar(self, orient='horizontal')
+        table_scroll_horizontal.pack(side=BOTTOM, fill=X)
+
+        self.my_table = ttk.Treeview(self, yscrollcommand=table_scroll.set, xscrollcommand=table_scroll_horizontal.set)
+        self.my_table.pack(side="top", fill="both", padx=10, pady=10)
+
+        table_scroll.config(command=self.my_table.yview)
+        table_scroll_horizontal.config(command=self.my_table.xview)
+
+        self.my_table['columns'] = ('ID', 'Date', 'Category', 'Income', 'Spending', 'Balance')
+
+        self.my_table.column("#0", width=0, stretch=NO)
+        self.my_table.column("ID", anchor=CENTER, width=80)
+        self.my_table.column("Date", anchor=CENTER, width=80)
+        self.my_table.column("Category", anchor=CENTER, width=80)
+        self.my_table.column("Income", anchor=CENTER, width=80)
+        self.my_table.column("Spending", anchor=CENTER, width=80)
+        self.my_table.column("Balance", anchor=CENTER, width=80)
+
+        self.my_table.heading("#0", text="", anchor=CENTER)
+        self.my_table.heading("ID", text="ID", anchor=CENTER)
+        self.my_table.heading("Date", text="Date", anchor=CENTER)
+        self.my_table.heading("Category", text="Category", anchor=CENTER)
+        self.my_table.heading("Income", text="Income", anchor=CENTER)
+        self.my_table.heading("Spending", text="Spending", anchor=CENTER)
+        self.my_table.heading("Balance", text="Balance", anchor=CENTER)
+
+        button = tk.Button(self, text="Back to Home", command=lambda: controller.show_frame("StartPage"))
+        button.pack(side="bottom", pady=10)
+
+    def display_data(self):
+        month_year = self.month_field.get()
+        try:
+            month, year = month_year.split('-')
+            month = int(month)
+            year = int(year)
+        except ValueError:
+            messagebox.showerror("Error", "Invalid month-year format. Use MM-YYYY.")
+            return
+
+        connection = pymysql.connect(host='localhost', user='root', password='', database='hematinaja')
+        try:
+            with connection.cursor() as cursor:
+                sql = "SELECT * FROM hitunguang"
+                cursor.execute(sql)
+                data = cursor.fetchall()
+        finally:
+            connection.close()
+
+        self.my_table.delete(*self.my_table.get_children())
+
+        filtered_data = []
+        for row in data:
+            date = datetime.strptime(row[1], '%Y-%m-%d')
+            if date.month == month and date.year == year:
+                filtered_data.append(row)
+                self.my_table.insert('', 'end', values=(row[0], row[1], row[2], row[3], row[4], row[5]))
+
+        self.plot_graph(filtered_data)
+
+    def plot_graph(self, data):
+        categories = {}
+        for row in data:
+            category = row[2]  # Kolom kategori
+            spending = int(row[4])  # Kolom pengeluaran
+
+            if spending > 0:
+                if category in categories:
+                    categories[category] += spending
+                else:
+                    categories[category] = spending
+
+        # Verifikasi hasil pengelompokan pengeluaran
+        print("Spending by Category:", categories)
+
+        fig = plt.Figure(figsize=(6, 4), dpi=100)
+        ax = fig.add_subplot(111)
+        ax.bar(categories.keys(), categories.values(), color='orange')
+        ax.set_xlabel('Category')
+        ax.set_ylabel('Spending')
+        ax.set_title('Spending by Category')
+
+        # Hapus grafik sebelumnya jika ada
+        for widget in self.winfo_children():
+            if isinstance(widget, FigureCanvasTkAgg):
+                widget.get_tk_widget().destroy()
+
+        canvas = FigureCanvasTkAgg(fig, self)
+        canvas.get_tk_widget().pack(side="top", fill="both", expand=True)
+
+
+class PageThree(tk.Frame):
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+
+        label = tk.Label(self, text="Update Data", font=controller.title_font)
+        label.pack(side="top", fill="x", pady=10)
+
+        self.id_var = tk.StringVar()
+        self.date_var = tk.StringVar()
+        self.category_var = tk.StringVar()
+        self.nominal_var = tk.StringVar()
+        self.income_var = tk.IntVar()
+        self.spending_var = tk.IntVar()
+
+        form_frame = Frame(self)
+        form_frame.pack(pady=20)
+
+        label_id = tk.Label(form_frame, text="ID")
+        entry_id = tk.Entry(form_frame, textvariable=self.id_var)
+        label_date = tk.Label(form_frame, text="Date (YYYY-MM-DD)")
+        entry_date = tk.Entry(form_frame, textvariable=self.date_var)
+        label_category = tk.Label(form_frame, text="Category")
+        entry_category = tk.Entry(form_frame, textvariable=self.category_var)
+        label_nominal = tk.Label(form_frame, text="Nominal")
+        entry_nominal = tk.Entry(form_frame, textvariable=self.nominal_var)
+
+        checkbox_income = tk.Checkbutton(form_frame, text="Income", variable=self.income_var)
+        checkbox_spending = tk.Checkbutton(form_frame, text="Spending", variable=self.spending_var)
+
+        label_id.grid(row=0, column=0, padx=10, pady=5)
+        entry_id.grid(row=0, column=1, padx=10, pady=5)
+        label_date.grid(row=1, column=0, padx=10, pady=5)
+        entry_date.grid(row=1, column=1, padx=10, pady=5)
+        label_category.grid(row=2, column=0, padx=10, pady=5)
+        entry_category.grid(row=2, column=1, padx=10, pady=5)
+        label_nominal.grid(row=3, column=0, padx=10, pady=5)
+        entry_nominal.grid(row=3, column=1, padx=10, pady=5)
+
+        checkbox_income.grid(row=4, column=0, padx=10, pady=5)
+        checkbox_spending.grid(row=4, column=1, padx=10, pady=5)
+
+        button_submit = tk.Button(self, text="Update", command=self.update_data)
+        button_submit.pack(pady=10)
+
+        button_home = tk.Button(self, text="Back to Home", command=lambda: controller.show_frame("StartPage"))
+        button_home.pack(pady=10)
+
+    def update_data(self):
+        record_id = self.id_var.get()
+        date = self.date_var.get()
+        category = self.category_var.get()
+        nominal = self.nominal_var.get()
+        income = self.income_var.get()
+        spending = self.spending_var.get()
+
+        try:
+            nominal = int(nominal)  # Konversi nominal ke integer
+        except ValueError:
+            messagebox.showerror("Error", "Nominal harus berupa angka")
+            return
+
+        connection = pymysql.connect(host='localhost', user='root', password='', database='hematinaja')
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT saldo, pemasukan, pengeluaran FROM hitunguang WHERE id = %s", (record_id,))
+            result = cursor.fetchone()
+
+            if not result:
+                messagebox.showerror("Error", "Record not found")
+                return
+
+            # Konversi hasil query ke integer jika diperlukan
+            current_balance = int(result[0]) if result[0] is not None else 0
+            current_income = int(result[1]) if result[1] is not None else 0
+            current_spending = int(result[2]) if result[2] is not None else 0
+
+            if income:
+                new_income = nominal
+                new_spending = current_spending
+                new_balance = current_balance - current_income + new_income
+            elif spending:
+                new_spending = nominal
+                new_income = current_income
+                new_balance = current_balance + current_spending - new_spending
+            else:
+                # Jika tidak ada income dan spending yang dipilih
+                messagebox.showerror("Error", "Pilih Income atau Spending")
+                return
+
+            sql = """UPDATE hitunguang 
+                     SET tanggal=%s, kategori=%s, pemasukan=%s, pengeluaran=%s, saldo=%s 
+                     WHERE id=%s"""
+            cursor.execute(sql, (date, category, new_income, new_spending, new_balance, record_id))
+            connection.commit()
+
+        messagebox.showinfo("Success", "Data updated successfully")
+        self.reset_fields()
+
+    def reset_fields(self):
+        self.id_var.set("")
+        self.date_var.set("")
+        self.category_var.set("")
+        self.nominal_var.set("")
+        self.income_var.set(0)
+        self.spending_var.set(0)
+
+class PageFour(tk.Frame):
+    def __init__(self, parent, controller):
+        tk.Frame.__init__(self, parent)
+        self.controller = controller
+
+        label = tk.Label(self, text="Delete Data", font=controller.title_font)
+        label.pack(side="top", fill="x", pady=10)
+
+        self.id_var = tk.StringVar()
+
+        form_frame = Frame(self)
+        form_frame.pack(pady=20)
+
+        label_id = tk.Label(form_frame, text="ID")
+        entry_id = tk.Entry(form_frame, textvariable=self.id_var)
+
+        label_id.grid(row=0, column=0, padx=10, pady=5)
+        entry_id.grid(row=0, column=1, padx=10, pady=5)
+
+        button_submit = tk.Button(self, text="Delete", command=self.delete_data)
+        button_submit.pack(pady=10)
+
+        button_home = tk.Button(self, text="Back to Home", command=lambda: controller.show_frame("StartPage"))
+        button_home.pack(pady=10)
+
+    def delete_data(self):
+        record_id = self.id_var.get()
+
+        connection = pymysql.connect(host='localhost', user='root', password='', database='hematinaja')
+        with connection.cursor() as cursor:
+            sql = "DELETE FROM hitunguang WHERE id=%s"
+            cursor.execute(sql, (record_id,))
+            connection.commit()
+
+        messagebox.showinfo("Success", "Data deleted successfully")
+        self.reset_fields()
+
+    def reset_fields(self):
+        self.id_var.set("")
+
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
