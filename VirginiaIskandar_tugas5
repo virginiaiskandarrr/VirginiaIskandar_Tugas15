@@ -273,6 +273,7 @@ class PageThree(tk.Frame):
         form_frame = Frame(self)
         form_frame.pack(pady=20)
 
+
         label_id = tk.Label(form_frame, text="ID")
         entry_id = tk.Entry(form_frame, textvariable=self.id_var)
         label_date = tk.Label(form_frame, text="Date (YYYY-MM-DD)")
